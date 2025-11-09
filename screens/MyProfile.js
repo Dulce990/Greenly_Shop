@@ -112,46 +112,91 @@ export default function MyProfile({ navigation }) {
         showToast("Permiso para la galería denegado");
         return;
       }
+      
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
       });
-      if (!result.cancelled) {
-        if (result.uri) setImageUri(result.uri);
-        if (result.assets && result.assets[0]?.uri) setImageUri(result.assets[0].uri);
+
+      if (!result.canceled) {  // Nota: en versiones nuevas es 'canceled' no 'cancelled'
+        const uri = result.assets?.[0]?.uri || result.uri;
+        if (uri) {
+          console.log('Image selected:', uri);  // Para debugging
+          setImageUri(uri);
+        } else {
+          showToast("No se pudo obtener la imagen seleccionada");
+        }
       }
     } catch (e) {
-      console.warn("pickImage error", e);
+      console.warn("pickImage error:", e);
       showToast("Error seleccionando imagen");
     }
   }
 
   async function handleSave() {
     if (!token || !userId) return showToast("No autenticado");
+    
+    // Validaciones
+    if (!username.trim()) {
+      showToast("El nombre de usuario es obligatorio");
+      return;
+    }
+    if (!email.trim()) {
+      showToast("El correo electrónico es obligatorio");
+      return;
+    }
+    
     setSaving(true);
     try {
       const formData = new FormData();
-      if (username) formData.append("username", username);
-      if (email) formData.append("email", email);
+      // Siempre incluir username y email ya que son requeridos por la API
+      formData.append("username", username.trim());
+      formData.append("email", email.trim());
 
+      // Si el usuario cambió la imagen y es una imagen local, adjuntarla
       if (imageUri && imageUri !== user.profile_picture) {
         const uriParts = imageUri.split("/");
-        const name = uriParts[uriParts.length - 1];
-        const match = /\.(\w+)$/.exec(name);
+        const rawName = uriParts[uriParts.length - 1].split('?')[0];
+        const match = /\.(\w+)$/.exec(rawName);
         const ext = match ? match[1].toLowerCase() : "jpg";
         const mime = ext === "png" ? "image/png" : "image/jpeg";
 
-        formData.append("profile_picture", {
-          uri: imageUri,
-          name: `profile.${ext}`,
-          type: mime,
-        });
+        // En web convertimos la URI (Data URL o object URL) a Blob/File
+        if (Platform.OS === 'web') {
+          try {
+            const response = await fetch(imageUri);
+            const blob = await response.blob();
+            // File constructor está disponible en navegadores
+            const file = new File([blob], `profile.${ext}`, { type: mime });
+            formData.append('profile_picture', file);
+          } catch (fetchErr) {
+            console.warn('Could not fetch image as blob (web):', fetchErr);
+            // No añadimos la imagen si falla la conversión; el servidor no acepta URLs en el campo file
+          }
+        } else {
+          // En móvil (Android/iOS) enviamos el objeto { uri, name, type }
+          // No remover file:// ya que algunos entornos lo requieren
+          if (!imageUri.startsWith('http')) {
+            formData.append('profile_picture', {
+              uri: imageUri,
+              name: `profile.${ext}`,
+              type: mime,
+            });
+          } else {
+            // Si imageUri es una URL remota (ej: imagen ya existente), no la adjuntamos como archivo
+            // El backend normalmente conserva la imagen si no se envía un nuevo archivo
+            console.log('Image is remote URL; skipping file upload');
+          }
+        }
       }
 
+      // Importante: no fijar manualmente Content-Type => dejar que axios / el runtime lo calcule
       const res = await axios.put(`http://${BASE_URL}/users/${userId}`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
         },
         timeout: 20000,
       });
@@ -165,8 +210,20 @@ export default function MyProfile({ navigation }) {
       }
     } catch (err) {
       console.warn("update error:", err?.response || err?.message || err);
-      const msg = err?.response?.data?.detail || err?.response?.data || err?.message;
-      showToast(msg ? String(msg) : "Error al actualizar perfil");
+      const detail = err?.response?.data?.detail;
+      let msg;
+      if (Array.isArray(detail)) {
+        // unir mensajes de validación
+        msg = detail
+          .map(d => (typeof d === 'object' ? JSON.stringify(d) : String(d)))
+          .join('; ');
+        console.error('Server validation errors:', detail);
+      } else if (detail) {
+        msg = String(detail);
+      } else {
+        msg = err?.response?.data || err?.message || 'Error al actualizar perfil';
+      }
+      showToast(msg);
     } finally {
       setSaving(false);
     }
