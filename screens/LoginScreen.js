@@ -4,9 +4,9 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   StyleSheet,
-  ToastAndroid,
+  Platform,
+  Alert,
   Image,
   TouchableOpacity,
   ActivityIndicator,
@@ -20,71 +20,81 @@ import { sendTokenToBackend } from "../utils/api";
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Helper cross-platform para mostrar mensajes
+function showToast(message) {
+  if (Platform.OS === "android") {
+    const { ToastAndroid } = require("react-native");
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+  } else {
+    // iOS / web
+    try {
+      Alert.alert("", message);
+    } catch (e) {
+      console.log("Toast:", message);
+    }
+  }
+}
+
 export default function LoginScreen({ navigation }) {
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [loading, setLoading] = useState(false);
 
   // === CONFIG GOOGLE (reemplaza por tus valores reales) ===
-  // 1) Client ID para Android/iOS/Expo web según config en Google Cloud Console.
-  // 2) En Expo Managed, suele usarse el clientId de tipo "OAuth 2.0 Client IDs" para Android/iOS o el "Web client" según tu flujo.
-  // Reemplaza 'YOUR_GOOGLE_CLIENT_ID' por tu client id.
+  // Sustituye estos campos por los client IDs que te entregue Google Cloud Console.
   const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: "YOUR_GOOGLE_CLIENT_ID_EXPO",      // para Expo Go / Android (si aplica)
-    iosClientId: "YOUR_GOOGLE_IOS_CLIENT_ID",       // si usas iOS nativo
-    androidClientId: "YOUR_GOOGLE_ANDROID_CLIENT_ID", // si usas Android nativo
-    webClientId: "YOUR_GOOGLE_WEB_CLIENT_ID",       // para web (opcional)
+    expoClientId: "YOUR_GOOGLE_CLIENT_ID_EXPO",
+    iosClientId: "YOUR_GOOGLE_IOS_CLIENT_ID",
+    androidClientId: "YOUR_GOOGLE_ANDROID_CLIENT_ID",
+    webClientId: "YOUR_GOOGLE_WEB_CLIENT_ID",
     scopes: ["profile", "email"],
   });
 
   useEffect(() => {
     if (response?.type === "success") {
       const { authentication } = response;
-      // authentication contains accessToken and idToken (on some configs)
-      // Preferimos enviar id_token al backend para validación en server.
       handleGoogleResponse(authentication);
     } else if (response?.type === "error") {
-      ToastAndroid.show("Error en autenticación con Google", ToastAndroid.SHORT);
+      showToast("Error en autenticación con Google");
     }
   }, [response]);
 
   async function handleGoogleResponse(authentication) {
-    // authentication may have accessToken; sometimes id_token is in response.params.id_token
-    // we'll try to get id_token from response if present; otherwise send accessToken to server for exchange.
     setLoading(true);
     try {
-      // Si tu response incluye id_token:
+      // Intentamos obtener id_token (algunas configuraciones lo ponen en response.params.id_token)
       const id_token = response?.params?.id_token || null;
-
       if (!id_token && !authentication?.accessToken) {
-        ToastAndroid.show("No se obtuvo token de Google", ToastAndroid.LONG);
+        showToast("No se obtuvo token de Google");
         setLoading(false);
         return;
       }
 
-      // Envia al backend para verificar y obtener tu JWT propio
-      // Backend: verificar id_token con Google y crear/obtener usuario -> devolver JWT
       const body = id_token ? { id_token } : { access_token: authentication.accessToken };
 
+      // Llama a tu endpoint que intercambia/valida el token de Google y devuelve tu JWT
       const res = await axios.post(`http://${BASE_URL}/auth/google`, body, { timeout: 10000 });
-      const token = res.data?.access_token || res.data?.token || null;
 
+      const token = res.data?.access_token || res.data?.token || null;
       if (!token) {
-        ToastAndroid.show("Respuesta inválida del servidor", ToastAndroid.LONG);
+        showToast("Respuesta inválida del servidor al autenticar con Google");
         setLoading(false);
         return;
       }
 
       await saveToken(token);
+      // opcional: await sendTokenToBackend(res.data);
 
-      // Puedes también enviar información a /save-token si lo necesitas:
-      // await sendTokenToBackend(res.data);
-
-      ToastAndroid.show("¡Login con Google exitoso!", ToastAndroid.SHORT);
+      showToast("¡Login con Google exitoso!");
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
-    } catch (e) {
-      console.warn("google login error", e?.response?.data || e.message);
-      ToastAndroid.show("Error autenticando con Google o con el servidor", ToastAndroid.LONG);
+    } catch (err) {
+      console.warn("google login error:", err?.response?.data || err.message || err);
+      const status = err?.response?.status;
+      if (status) {
+        showToast(`Error servidor: ${status}`);
+      } else {
+        showToast("Error autenticando con Google o con el servidor");
+      }
     } finally {
       setLoading(false);
     }
@@ -92,7 +102,7 @@ export default function LoginScreen({ navigation }) {
 
   async function onLogin() {
     if (!usuario || !contrasena) {
-      ToastAndroid.show("Completa ambos campos", ToastAndroid.SHORT);
+      showToast("Completa ambos campos");
       return;
     }
     setLoading(true);
@@ -102,22 +112,30 @@ export default function LoginScreen({ navigation }) {
         { username: usuario, password: contrasena },
         { timeout: 8000 }
       );
+
       const token = res.data?.access_token || res.data?.token || null;
       if (!token) {
-        ToastAndroid.show("Respuesta inválida del servidor", ToastAndroid.LONG);
+        showToast("Respuesta inválida del servidor");
         setLoading(false);
         return;
       }
+
       await saveToken(token);
+      // opcional: await sendTokenToBackend(res.data);
 
-      // enviar token al backend si lo necesitas:
-      // await sendTokenToBackend(res.data);
-
-      ToastAndroid.show(`¡Bienvenido!`, ToastAndroid.SHORT);
+      showToast("¡Bienvenido!");
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
-    } catch (e) {
-      console.warn(e);
-      ToastAndroid.show("Credenciales inválidas o error de conexión", ToastAndroid.LONG);
+    } catch (err) {
+      console.warn("LOGIN axios error:", err?.response || err.message || err);
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (status === 401) {
+        showToast("Credenciales inválidas (401). Verifica usuario/contraseña.");
+      } else if (status) {
+        showToast(`Error servidor: ${status} - ${JSON.stringify(data)}`);
+      } else {
+        showToast("Error de conexión o timeout");
+      }
     } finally {
       setLoading(false);
     }
@@ -163,9 +181,13 @@ export default function LoginScreen({ navigation }) {
       <TouchableOpacity
         style={styles.googleBtn}
         onPress={() => {
-          // útil mostrar el promptAsync para abrir el flujo de Google
+          if (!request) {
+            showToast("Provider Google no configurado correctamente");
+            return;
+          }
           promptAsync();
         }}
+        disabled={loading}
       >
         <Image source={require("../assets/google-logo.png")} style={styles.googleLogo} />
         <Text style={styles.googleText}>Continuar con Google</Text>

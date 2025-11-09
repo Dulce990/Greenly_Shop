@@ -1,27 +1,53 @@
 // screens/SplashScreen.js
 import React, { useEffect } from "react";
 import { View, Text, Image, StyleSheet, ActivityIndicator } from "react-native";
-import { getToken } from "../utils/TokenStore";
+import { getToken, clearToken } from "../utils/TokenStore";
+import BASE_URL from "../utils/const";
 
 export default function SplashScreen({ navigation }) {
   useEffect(() => {
     let mounted = true;
 
     async function check() {
-      // Espera 3s (simula carga) mientras comprobamos token
-      const wait = new Promise(res => setTimeout(res, 3000));
-      const tokenPromise = getToken(); // lee token si existe
-      const [token] = await Promise.all([tokenPromise, wait]);
+      try {
+        // Espera 3s (simula carga) mientras comprobamos token
+        const wait = new Promise(res => setTimeout(res, 3000));
+        const tokenPromise = getToken(); // lee token si existe
+        const [token] = await Promise.all([tokenPromise, wait]);
 
-      if (!mounted) return;
-      if (token) {
-        // si hay token, vamos al stack principal (Home). Usamos reset para limpiar historial.
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Main" }],
-        });
-      } else {
-        // si no hay token, vamos a Auth (login)
+        if (!mounted) return;
+        
+        if (token) {
+          // Validar el token con el backend
+          const response = await fetch(`http://${BASE_URL}/validate-token`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (response.ok) {
+            // Token válido, ir al stack principal
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Main" }],
+            });
+          } else {
+            // Token inválido, limpiar y ir a login
+            await clearToken();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Auth" }],
+            });
+          }
+        } else {
+          // No hay token, ir a login
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Auth" }],
+          });
+        }
+      } catch (error) {
+        console.error('Error en validación:', error);
+        // En caso de error, ir a login
+        await clearToken();
         navigation.reset({
           index: 0,
           routes: [{ name: "Auth" }],
