@@ -10,13 +10,16 @@ import axios from "axios";
 import { getToken, clearToken } from "../utils/TokenStore";
 import BASE_URL from "../utils/const";
 
-import HomeScreen from "./HomeScreen";
-import ProductDetail from "./ProductDetail";
-import AddProduct from "./AddProduct";
-import CartScreen from "./CartScreen";
-import MyProfile from "./MyProfile";
-import LoginScreen from "./LoginScreen";
-import ProductsScreen from "./ProductsScreen";
+import {
+  HomeScreen,
+  ProductDetail,
+  AddProduct,
+  CartScreen,
+  MyProfile,
+  ProductsScreen,
+  RecomendacionesScreen,
+  AboutUs,
+} from "./screen";
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -53,6 +56,9 @@ function HomeStack() {
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="MyProfile" component={MyProfile} />
       <Stack.Screen name="Products" component={ProductsScreen} />
+      <Stack.Screen name="Recomendaciones" component={RecomendacionesScreen} />
+      <Stack.Screen name="AboutUs" component={AboutUs} />
+
     </Stack.Navigator>
   );
 }
@@ -152,10 +158,13 @@ export default function MainStack() {
         swipeEdgeWidth: 40,
       }}
     >
-  <Drawer.Screen name="Home" component={HomeStack} />
-  <Drawer.Screen name="Mi perfil" component={MyProfile} />
-  <Drawer.Screen name="Carrito" component={CartScreen} />
-  <Drawer.Screen name="Productos" component={ProductsScreen} />
+      <Drawer.Screen name="Home" component={HomeStack} />
+      <Drawer.Screen name="Mi perfil" component={MyProfile} />
+      <Drawer.Screen name="Recomendaciones" component={RecomendacionesScreen} />
+      <Drawer.Screen name="Carrito" component={CartScreen} />
+      <Drawer.Screen name="Productos" component={ProductsScreen} />
+      <Drawer.Screen name="Sobre nosotros" component={AboutUs} />
+
     </Drawer.Navigator>
   );
 }

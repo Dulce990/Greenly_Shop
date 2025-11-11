@@ -1,5 +1,4 @@
 // archivo que contiene la ip para las peticiones a la API
-
 // cambiar la ip segun la red a la que este conectado el dispositivo movil
 
 // escuela:
