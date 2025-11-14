@@ -120,22 +120,15 @@ export default function LoginScreen({ navigation }) {
         return;
       }
 
-      await saveToken(token);
-      // opcional: await sendTokenToBackend(res.data);
+      const saved = await saveToken(token);
+      console.log('[Login] token saved?', saved, 'token:', token);
+      // espera mínimo 200ms para asegurar que AsyncStorage haya finalizado en algunos dispositivos
+      await new Promise(r => setTimeout(r, 200));
 
       showToast("¡Bienvenido!");
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } catch (err) {
-      console.warn("LOGIN axios error:", err?.response || err.message || err);
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      if (status === 401) {
-        showToast("Credenciales inválidas (401). Verifica usuario/contraseña.");
-      } else if (status) {
-        showToast(`Error servidor: ${status} - ${JSON.stringify(data)}`);
-      } else {
-        showToast("Error de conexión o timeout");
-      }
+      console.warn("login error:", err?.response?.data || err.message || err);
     } finally {
       setLoading(false);
     }

@@ -19,6 +19,7 @@ import {
   ProductsScreen,
   RecomendacionesScreen,
   AboutUs,
+  MyProducts,
 } from "./screen";
 
 const Drawer = createDrawerNavigator();
@@ -58,6 +59,7 @@ function HomeStack() {
       <Stack.Screen name="Products" component={ProductsScreen} />
       <Stack.Screen name="Recomendaciones" component={RecomendacionesScreen} />
       <Stack.Screen name="AboutUs" component={AboutUs} />
+      <Stack.Screen name="MyProducts" component={MyProducts} />
 
     </Stack.Navigator>
   );
@@ -164,7 +166,8 @@ export default function MainStack() {
       <Drawer.Screen name="Carrito" component={CartScreen} />
       <Drawer.Screen name="Productos" component={ProductsScreen} />
       <Drawer.Screen name="Sobre nosotros" component={AboutUs} />
-
+      <Drawer.Screen name="Mis productos" component={MyProducts} />
+      <Drawer.Screen name="Agregar producto" component={AddProduct} />
     </Drawer.Navigator>
   );
 }
